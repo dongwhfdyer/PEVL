@@ -13,6 +13,7 @@ import torch.nn as nn
 from torch.optim.optimizer import Optimizer, required
 import math
 
+
 class SGDP(Optimizer):
     def __init__(self, params, lr=required, momentum=0, dampening=0,
                  weight_decay=0, nesterov=False, eps=1e-8, delta=0.1, wd_ratio=0.1):
@@ -88,7 +89,7 @@ class SGDP(Optimizer):
 
                 # Weight decay
                 if weight_decay != 0:
-                    p.data.mul_(1 - group['lr'] * group['weight_decay'] * wd_ratio / (1-momentum))
+                    p.data.mul_(1 - group['lr'] * group['weight_decay'] * wd_ratio / (1 - momentum))
 
                 # Step
                 p.data.add_(-group['lr'], d_p)

@@ -6,37 +6,32 @@ import random
 import os
 
 path = os.listdir('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/new_vqa_training_grounding_split_data_inference_512/')
-path = ['/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/new_vqa_training_grounding_split_data_inference_512/'+x for x in path]
+path = ['/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/new_vqa_training_grounding_split_data_inference_512/' + x for x in path]
 b = []
 for x in path:
-    b.extend(json.load(open(x,'r')))
+    b.extend(json.load(open(x, 'r')))
 
-
-
-grounding_dict = {'vg':  {},\
+grounding_dict = {'vg': {}, \
                   'vqa': {}}
 
 for x in tqdm(b):
     dataset = x['dataset']
     q_id = x['q_id']
     if q_id not in grounding_dict[dataset].keys():
-        grounding_dict[dataset][q_id] = [{'question_id':x['q_id'],\
-                                          'pre_bbox': x['pre_bbox'],\
-                                          'logits': x['logits'],\
-                                          'positive_token_index': x['positive_token_index'],\
-                                          'image_path': x['image_path'],}]
+        grounding_dict[dataset][q_id] = [{'question_id': x['q_id'], \
+                                          'pre_bbox': x['pre_bbox'], \
+                                          'logits': x['logits'], \
+                                          'positive_token_index': x['positive_token_index'], \
+                                          'image_path': x['image_path'], }]
     else:
-        grounding_dict[dataset][q_id].append({'question_id':x['q_id'],\
-                                              'pre_bbox': x['pre_bbox'],\
-                                              'logits': x['logits'],\
-                                              'positive_token_index': x['positive_token_index'],\
-                                              'image_path': x['image_path'],})
+        grounding_dict[dataset][q_id].append({'question_id': x['q_id'], \
+                                              'pre_bbox': x['pre_bbox'], \
+                                              'logits': x['logits'], \
+                                              'positive_token_index': x['positive_token_index'], \
+                                              'image_path': x['image_path'], })
 
-
-with open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/2022-2-20-grounding_dict_for_new_vqa_training_grounding_split_data_inference_512.json','w') as f:
+with open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/2022-2-20-grounding_dict_for_new_vqa_training_grounding_split_data_inference_512.json', 'w') as f:
     json.dump(grounding_dict, f)
-
-
 
 # gqa_unbalanced_all_data = []
 # raw_data = json.load(open('/mnt/sfs_turbo/chenqianyu/ALBEF_Datasets/gqa/train_balanced_questions.json','r'))
@@ -153,10 +148,6 @@ with open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/2022-2-20-ground
 #     json.dump(gqa_balanced_grounding_single_bbox_data, f)
 
 
-
-
-
-
 # a = json.load(open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/gqa/2022-2-7-gqa-balanced-finetune-data.json','r'))
 # b=[]
 # for x in a:
@@ -166,7 +157,6 @@ with open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/2022-2-20-ground
 #     s['question'] = x['normal_question']
 #     s['answer'] = [x['answer']]
 #     b.append(s.copy())
-
 
 
 # with open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/gqa/2022-2-14-gqa-balanced-for-albef-vqa-data.json','w') as f:
@@ -277,9 +267,6 @@ with open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/2022-2-20-ground
 #     json.dump(b,f)
 
 
-
-
-
 # split_train_data = []
 # for x in train_data:
 #     sgg_dict = x.copy()
@@ -314,7 +301,6 @@ with open('/mnt/sfs_turbo/chenqianyu/albef_downstream_tasks/vqa/2022-2-20-ground
 #         split_neg_pair['un_rel_pair'] = neg_rel_pair_list
 #         split_neg_pair['with_rel'] = 0
 #         split_train_data.append(split_neg_pair)
-
 
 
 # t = []

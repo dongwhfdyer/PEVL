@@ -43,7 +43,7 @@ class Lookahead(Optimizer):
             self.update_slow(group)
 
     def step(self, closure=None):
-        #assert id(self.param_groups) == id(self.base_optimizer.param_groups)
+        # assert id(self.param_groups) == id(self.base_optimizer.param_groups)
         loss = self.base_optimizer.step(closure)
         for group in self.param_groups:
             group['lookahead_step'] += 1

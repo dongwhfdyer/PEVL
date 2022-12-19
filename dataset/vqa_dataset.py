@@ -13,31 +13,32 @@ from dataset.randaugment import RandomAugment
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
 
+
 class GQA_train_dataset(Dataset):
-    def __init__(self, ann_file, max_words=200, resize_ratio=0.25,img_res=None,tokenizer=None,answer_dict=None,image_path=None):        
+    def __init__(self, ann_file, max_words=200, resize_ratio=0.25, img_res=None, tokenizer=None, answer_dict=None, image_path=None):
         self.ann = []
         for f in ann_file:
             print(f)
-            self.ann += json.load(open(f,'r'))
+            self.ann += json.load(open(f, 'r'))
         print(len(self.ann))
-        self.image_path=image_path
-        self.answer_dict=answer_dict
-        self.tokenizer=tokenizer
+        self.image_path = image_path
+        self.answer_dict = answer_dict
+        self.tokenizer = tokenizer
         self.img_res = img_res
         normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
-        self.final_transform = transforms.Compose([ 
-            transforms.Resize((img_res,img_res),interpolation=Image.BICUBIC),\
-            transforms.ToTensor(),\
-            normalize,\
-        ])
+        self.final_transform = transforms.Compose([
+            transforms.Resize((img_res, img_res), interpolation=Image.BICUBIC), \
+            transforms.ToTensor(), \
+            normalize, \
+            ])
         self.max_words = max_words
         self.aug_transform = Augfunc(True, resize_ratio, img_res)
-        self.pos_dict = {x:f"[pos_{x}]" for x in range(512)}
+        self.pos_dict = {x: f"[pos_{x}]" for x in range(512)}
 
     def __len__(self):
         return len(self.ann)
 
-    def __getitem__(self, index):    
+    def __getitem__(self, index):
         ann = self.ann[index].copy()
         file_name = os.path.join(self.image_path, ann['file_name'])
         image = Image.open(file_name).convert('RGB')
@@ -45,101 +46,99 @@ class GQA_train_dataset(Dataset):
         w, h = image.size
         max_size = torch.as_tensor([w, h], dtype=torch.float32)
         cropped_boxes = torch.min(bbox_list.reshape(-1, 2, 2), max_size)
-        ann['bbox_list'] = cropped_boxes.reshape(-1,4).numpy().tolist()
+        ann['bbox_list'] = cropped_boxes.reshape(-1, 4).numpy().tolist()
         image, ann, do_horizontal = self.aug_transform.random_aug(image, ann, True)
 
         if ann['no_bbox'] == 0:
             seq = ann['question']
-            tokens2bbox={}
+            tokens2bbox = {}
             for tokens, bbox in zip(ann['tokens_positive'], ann['bbox_list']):
-                token_id = str(tokens[0])+str(tokens[1])
+                token_id = str(tokens[0]) + str(tokens[1])
                 pos_seq = ['  @@ ']
-                bbox_512 = [int(xy*512/self.img_res) if int(xy*512/self.img_res) <=511 else 511  for xy in bbox ]
+                bbox_512 = [int(xy * 512 / self.img_res) if int(xy * 512 / self.img_res) <= 511 else 511 for xy in bbox]
                 pos_seq.extend([self.pos_dict[int(x)] for x in bbox_512])
-                #pos_seq.extend([self.pos_dict[int(x)] for x in bbox])
+                # pos_seq.extend([self.pos_dict[int(x)] for x in bbox])
                 pos_seq.append(' ## ')
                 tokens2bbox[token_id] = ' '.join(pos_seq)
             tokens_end = ann['tokens_positive'][1:]
-            tokens_end.append([10000,0])
+            tokens_end.append([10000, 0])
             new_seq = seq[:ann['tokens_positive'][0][0]]
             for s, e in zip(ann['tokens_positive'], tokens_end):
-                id = str(s[0])+str(s[1])
-                pos_seq =  tokens2bbox[id]
+                id = str(s[0]) + str(s[1])
+                pos_seq = tokens2bbox[id]
                 new_seq += seq[s[0]:s[1]]
                 new_seq += pos_seq
                 new_seq += seq[s[1]:e[0]]
-            #caption = pre_question(new_seq, self.max_words) 
+            # caption = pre_question(new_seq, self.max_words)
             caption = new_seq
             # caption = question_output 
             if do_horizontal:
                 answer = ann['answer']
                 answer = answer.replace("left", " [TMP] ").replace("right", "left").replace(" [TMP] ", "right")
                 caption = caption.replace("left", " [TMP] ").replace("right", "left").replace(" [TMP] ", "right")
-                caption = pre_question(caption, self.max_words) 
-                length = len(self.tokenizer(answer, padding='longest', truncation=True, max_length=250, return_tensors="pt").input_ids[0][1:]) 
+                caption = pre_question(caption, self.max_words)
+                length = len(self.tokenizer(answer, padding='longest', truncation=True, max_length=250, return_tensors="pt").input_ids[0][1:])
                 mask_list = ['[MASK]' for l in range(6)]
                 padding_num = 6 - length
                 label_padding = ['[PAD]' for x in range(padding_num)]
-                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])  
-                seq_label = ' '.join([caption, '[SEP]', answer, ' '.join(label_padding)]) 
+                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])
+                seq_label = ' '.join([caption, '[SEP]', answer, ' '.join(label_padding)])
             else:
                 answer = ann['answer']
-                caption = pre_question(caption, self.max_words) 
-                length = len(self.tokenizer(answer, padding='longest', truncation=True, max_length=250, return_tensors="pt").input_ids[0][1:]) 
+                caption = pre_question(caption, self.max_words)
+                length = len(self.tokenizer(answer, padding='longest', truncation=True, max_length=250, return_tensors="pt").input_ids[0][1:])
                 mask_list = ['[MASK]' for l in range(6)]
                 padding_num = 6 - length
                 label_padding = ['[PAD]' for x in range(padding_num)]
-                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])  
+                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])
                 seq_label = ' '.join([caption, '[SEP]', answer, ' '.join(label_padding)])
-            #print(caption)
+            # print(caption)
         elif ann['no_bbox'] == 1:
             seq = ann['question']
-            caption = seq 
+            caption = seq
             if do_horizontal:
                 answer = ann['answer']
                 answer = answer.replace("left", " [TMP] ").replace("right", "left").replace(" [TMP] ", "right")
                 caption = caption.replace("left", " [TMP] ").replace("right", "left").replace(" [TMP] ", "right")
-                caption = pre_question(caption, self.max_words) 
+                caption = pre_question(caption, self.max_words)
                 length = len(self.tokenizer(answer, padding='longest', truncation=True, max_length=250, return_tensors="pt").input_ids[0][1:])
                 mask_list = ['[MASK]' for l in range(6)]
                 padding_num = 6 - length
                 label_padding = ['[PAD]' for x in range(padding_num)]
-                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])  
-                seq_label = ' '.join([caption, '[SEP]', answer, ' '.join(label_padding)]) 
+                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])
+                seq_label = ' '.join([caption, '[SEP]', answer, ' '.join(label_padding)])
             else:
                 answer = ann['answer']
-                caption = pre_question(caption, self.max_words) 
+                caption = pre_question(caption, self.max_words)
                 length = len(self.tokenizer(answer, padding='longest', truncation=True, max_length=250, return_tensors="pt").input_ids[0][1:])
                 mask_list = ['[MASK]' for l in range(6)]
                 padding_num = 6 - length
                 label_padding = ['[PAD]' for x in range(padding_num)]
-                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])  
-                seq_label = ' '.join([caption, '[SEP]', answer,  ' '.join(label_padding)])
-        return image, seq_label, seq_input 
-
-
+                seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])
+                seq_label = ' '.join([caption, '[SEP]', answer, ' '.join(label_padding)])
+        return image, seq_label, seq_input
 
 
 class GQA_val_dataset(Dataset):
-    def __init__(self, ann_file, max_words=200, resize_ratio=0.25,img_res=None, image_path=None):        
+    def __init__(self, ann_file, max_words=200, resize_ratio=0.25, img_res=None, image_path=None):
         self.ann = []
         for f in ann_file:
             print(f)
-            self.ann += json.load(open(f,'r'))
+            self.ann += json.load(open(f, 'r'))
         self.img_res = img_res
         self.image_path = image_path
         normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
-        self.final_transform = transforms.Compose([ 
-            transforms.ToTensor(),\
-            normalize,\
-        ])
+        self.final_transform = transforms.Compose([
+            transforms.ToTensor(), \
+            normalize, \
+            ])
         self.max_words = max_words
-        self.pos_dict = {x:f"[pos_{x}]" for x in range(512)}
+        self.pos_dict = {x: f"[pos_{x}]" for x in range(512)}
 
     def __len__(self):
         return len(self.ann)
 
-    def __getitem__(self, index):    
+    def __getitem__(self, index):
         ann = self.ann[index].copy()
         # image = Image.open(ann['file_name']).convert('RGB')
         file_name = os.path.join(self.image_path, ann['file_name'])
@@ -148,38 +147,38 @@ class GQA_val_dataset(Dataset):
         w, h = image.size
         max_size = torch.as_tensor([w, h], dtype=torch.float32)
         cropped_boxes = torch.min(bbox_list.reshape(-1, 2, 2), max_size)
-        ann['bbox_list'] = cropped_boxes.reshape(-1,4).numpy().tolist()
-        image, ann= resize(image, ann, (self.img_res, self.img_res))
+        ann['bbox_list'] = cropped_boxes.reshape(-1, 4).numpy().tolist()
+        image, ann = resize(image, ann, (self.img_res, self.img_res))
         image = self.final_transform(image)
-        if ann['no_bbox'] == 0: 
-            seq = ann['question'] 
-            tokens2bbox={}
+        if ann['no_bbox'] == 0:
+            seq = ann['question']
+            tokens2bbox = {}
             for tokens, bbox in zip(ann['tokens_positive'], ann['bbox_list']):
-                token_id = str(tokens[0])+str(tokens[1])
+                token_id = str(tokens[0]) + str(tokens[1])
                 pos_seq = ['  @@ ']
-                bbox_512 = [int(xy*512/self.img_res) if int(xy*512/self.img_res) <=511 else 511  for xy in bbox ]
+                bbox_512 = [int(xy * 512 / self.img_res) if int(xy * 512 / self.img_res) <= 511 else 511 for xy in bbox]
                 pos_seq.extend([self.pos_dict[int(x)] for x in bbox_512])
                 pos_seq.append(' ## ')
                 tokens2bbox[token_id] = ' '.join(pos_seq)
             tokens_end = ann['tokens_positive'][1:]
-            tokens_end.append([10000,0])
+            tokens_end.append([10000, 0])
             new_seq = seq[:ann['tokens_positive'][0][0]]
             for s, e in zip(ann['tokens_positive'], tokens_end):
-                id = str(s[0])+str(s[1])
-                pos_seq =  tokens2bbox[id]
+                id = str(s[0]) + str(s[1])
+                pos_seq = tokens2bbox[id]
                 new_seq += seq[s[0]:s[1]]
                 new_seq += pos_seq
                 new_seq += seq[s[1]:e[0]]
-            #caption = pre_question(new_seq, self.max_words) 
+            # caption = pre_question(new_seq, self.max_words)
             caption = new_seq
             # caption = question_output 
             answer = ann['answer']
-            caption = pre_question(caption, self.max_words) 
+            caption = pre_question(caption, self.max_words)
             # length = len(tokenizer(answer, padding='longest', truncation=True, max_length=250, return_tensors="pt").input_ids[0][1:]) 
             mask_list = ['[MASK]' for l in range(6)]
             seq_input = ' '.join([caption, '[SEP]', ' '.join(mask_list)])
             q_id = ann['q_id']
-            #print(caption)
+            # print(caption)
         elif ann['no_bbox'] == 1:
             seq = ann['normal_question'] if 'normal_question' in ann else ann['question']
             caption = seq
@@ -194,32 +193,31 @@ class GQA_val_dataset(Dataset):
         return image, seq_input, answer, torch.tensor(int(q_id))
 
 
-    
-
 class Augfunc(object):
     def __init__(self, horizontal=True, resize_ratio=0.25, img_res=None):
         self.resize_ratio = resize_ratio
-        max_size=1333
-        self.img_res=img_res
+        max_size = 1333
+        self.img_res = img_res
         normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
         self.random_size_crop = Compose(
-                                            [
-                                                RandomResize([400, 500, 600]),
-                                                RandomSizeCrop(384, max_size),
-                                            ]
-                                        )    
+            [
+                RandomResize([400, 500, 600]),
+                RandomSizeCrop(384, max_size),
+            ]
+        )
         self.horizontal = horizontal
         if self.horizontal:
             self.random_horizontal = RandomHorizontalFlip()
-        self.final_transform = transforms.Compose([ 
-            RandomAugment(2,5,isPIL=True,augs=['Identity','AutoContrast','Equalize','Brightness','Sharpness',]),\
-            transforms.ToTensor(),\
-            normalize,\
-        ])
+        self.final_transform = transforms.Compose([
+            RandomAugment(2, 5, isPIL=True, augs=['Identity', 'AutoContrast', 'Equalize', 'Brightness', 'Sharpness', ]), \
+            transforms.ToTensor(), \
+            normalize, \
+            ])
+
     def random_aug(self, image, ann, do_hori):
-        do_horizontal=False
+        do_horizontal = False
         if random.random() < self.resize_ratio:
-            image, ann = resize(image, ann, (self.img_res,self.img_res))
+            image, ann = resize(image, ann, (self.img_res, self.img_res))
         else:
             image, ann = self.random_size_crop(image, ann)
             image, ann = resize(image, ann, (self.img_res, self.img_res))
@@ -227,9 +225,9 @@ class Augfunc(object):
             image, ann, do_horizontal = self.random_horizontal(image, ann)
         image = self.final_transform(image)
         return image, ann, do_horizontal
-        
 
-def pre_caption(caption,max_words):
+
+def pre_caption(caption, max_words):
     caption = re.sub(
         r"([,.'!?\"()*:;~])",
         '',
@@ -240,27 +238,28 @@ def pre_caption(caption,max_words):
         ' ',
         caption,
     )
-    caption = caption.rstrip('\n') 
+    caption = caption.rstrip('\n')
     caption = caption.strip(' ')
-    #truncate caption
+    # truncate caption
     caption_words = caption.split(' ')
-    if len(caption_words)>max_words:
+    if len(caption_words) > max_words:
         caption = ' '.join(caption_words[:max_words])
     return caption
 
 
-def pre_question(question,max_ques_words):
+def pre_question(question, max_ques_words):
     question = re.sub(
         r"([,.'!?\"()*:;~])",
         '',
         question.lower(),
-    ).replace('-', ' ').replace('/', ' ')  
+    ).replace('-', ' ').replace('/', ' ')
     question = question.rstrip(' ')
-    #truncate question
+    # truncate question
     question_words = question.split(' ')
-    if len(question_words)>max_ques_words:
+    if len(question_words) > max_ques_words:
         question = ' '.join(question_words[:max_ques_words])
     return question
+
 
 def hflip(image, target):
     flipped_image = F.hflip(image)
@@ -279,6 +278,7 @@ class RandomResize(object):
         assert isinstance(sizes, (list, tuple))
         self.sizes = sizes
         self.max_size = max_size
+
     def __call__(self, img, target=None):
         size = random.choice(self.sizes)
         return resize(img, target, size, self.max_size)
@@ -287,18 +287,20 @@ class RandomResize(object):
 class RandomHorizontalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
+
     def __call__(self, img, target):
         do_horizontal = False
         if random.random() < self.p:
             return hflip(img, target)
         return img, target, do_horizontal
-    
+
 
 class RandomSizeCrop(object):
     def __init__(self, min_size: int, max_size: int, respect_boxes: bool = True):
         self.min_size = min_size
         self.max_size = max_size
         self.respect_boxes = respect_boxes  # if True we can't crop a box out
+
     def __call__(self, img: PIL.Image.Image, target: dict):
         init_boxes = len(target["not_crop_bbox_list"])
         max_patience = 100
@@ -358,11 +360,13 @@ def resize(image, target, size, max_size=None):
             oh = size
             ow = int(size * w / h)
         return (oh, ow)
+
     def get_size(image_size, size, max_size=None):
         if isinstance(size, (list, tuple)):
             return size[::-1]
         else:
             return get_size_with_aspect_ratio(image_size, size, max_size)
+
     size = get_size(image.size, size, max_size)
     rescaled_image = F.resize(image, size)
     if target is None:
@@ -387,10 +391,12 @@ def resize(image, target, size, max_size=None):
 class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
+
     def __call__(self, image, target):
         for t in self.transforms:
             image, target = t(image, target)
         return image, target
+
     def __repr__(self):
         format_string = self.__class__.__name__ + "("
         for t in self.transforms:

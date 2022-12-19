@@ -11,7 +11,6 @@ import torch
 
 from .scheduler import Scheduler
 
-
 _logger = logging.getLogger(__name__)
 
 

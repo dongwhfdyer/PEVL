@@ -128,9 +128,9 @@ def contrast_func(img, factor):
     """
     mean = np.sum(np.mean(img, axis=(0, 1)) * np.array([0.114, 0.587, 0.299]))
     table = np.array([(
-        el - mean) * factor + mean
-        for el in range(256)
-    ]).clip(0, 255).astype(np.uint8)
+                              el - mean) * factor + mean
+                      for el in range(256)
+                      ]).clip(0, 255).astype(np.uint8)
     out = table[img]
     return out
 
@@ -224,6 +224,7 @@ def cutout_func(img, pad_size, replace=(0, 0, 0)):
 def enhance_level_to_args(MAX_LEVEL):
     def level_to_args(level):
         return ((level / MAX_LEVEL) * 1.8 + 0.1,)
+
     return level_to_args
 
 
@@ -256,7 +257,8 @@ def cutout_level_to_args(cutout_const, MAX_LEVEL, replace_value):
 def solarize_level_to_args(MAX_LEVEL):
     def level_to_args(level):
         level = int((level / MAX_LEVEL) * 256)
-        return (level, )
+        return (level,)
+
     return level_to_args
 
 
@@ -267,7 +269,8 @@ def none_level_to_args(level):
 def posterize_level_to_args(MAX_LEVEL):
     def level_to_args(level):
         level = int((level / MAX_LEVEL) * 4)
-        return (level, )
+        return (level,)
+
     return level_to_args
 
 
@@ -330,7 +333,7 @@ class RandomAugment(object):
         self.M = M
         self.isPIL = isPIL
         if augs:
-            self.augs = augs       
+            self.augs = augs
         else:
             self.augs = list(arg_dict.keys())
 
@@ -340,13 +343,13 @@ class RandomAugment(object):
 
     def __call__(self, img):
         if self.isPIL:
-            img = np.array(img)            
+            img = np.array(img)
         ops = self.get_random_ops()
         for name, prob, level in ops:
             if np.random.random() > prob:
                 continue
             args = arg_dict[name](level)
-            img = func_dict[name](img, *args) 
+            img = func_dict[name](img, *args)
         return img
 
 

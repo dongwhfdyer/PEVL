@@ -14,6 +14,7 @@ import datetime
 import torch
 import torch.distributed as dist
 
+
 class SmoothedValue(object):
     """Track a series of values and provide access to smoothed values over a
     window or the global series average.
@@ -110,8 +111,8 @@ class MetricLogger(object):
             loss_str.append(
                 "{}: {:.4f}".format(name, meter.global_avg)
             )
-        return self.delimiter.join(loss_str)    
-    
+        return self.delimiter.join(loss_str)
+
     def synchronize_between_processes(self):
         for meter in self.meters.values():
             meter.synchronize_between_processes()
@@ -164,7 +165,6 @@ class MetricLogger(object):
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print('{} Total time: {} ({:.4f} s / it)'.format(
             header, total_time_str, total_time / len(iterable)))
-        
 
 
 class AttrDict(dict):
@@ -180,6 +180,7 @@ def compute_acc(logits, label, reduction='mean'):
     elif reduction == 'mean':
         return ret.mean().item()
 
+
 def compute_n_params(model, return_str=True):
     tot = 0
     for p in model.parameters():
@@ -194,6 +195,7 @@ def compute_n_params(model, return_str=True):
             return '{:.1f}K'.format(tot / 1e3)
     else:
         return tot
+
 
 def setup_for_distributed(is_master):
     """

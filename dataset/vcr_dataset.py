@@ -7,6 +7,7 @@ from torchvision import transforms
 import PIL
 from PIL import Image
 from PIL import ImageFile
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.MAX_IMAGE_PIXELS = None
 import re
@@ -16,44 +17,45 @@ import torchvision.transforms as T
 import torchvision.transforms.functional as F
 from dataset.randaugment import RandomAugment
 
-
 ##for base64 loading
 from io import BytesIO
 import base64
 
-pos_dict = {x:f"[pos_{x}]" for x in range(512)}
+pos_dict = {x: f"[pos_{x}]" for x in range(512)}
+
+
 class VCR_train_dataset(Dataset):
-    def __init__(self, ann_file, image_path, max_words=200, resize_ratio=0.25, img_res=256, data_load_mode='pevl'):        
+    def __init__(self, ann_file, image_path, max_words=200, resize_ratio=0.25, img_res=256, data_load_mode='pevl'):
         self.ann = []
         for f in ann_file:
-            self.ann += json.load(open(f,'r'))
+            self.ann += json.load(open(f, 'r'))
         # self.image_file = json.load(open('/weka-jd/prod/public/permanent/group_liuzhiyuan/chenqianyu/workspaces/dataset_center/pevl/chenqianyu_vcr_images_base64.json'))
         # print(len(self.image_file))
         print(len(self.ann))
-        self.image_path=image_path
+        self.image_path = image_path
         self.img_res = img_res
-        self.pos_dict = {x:f"[pos_{x}]" for x in range(512)}
+        self.pos_dict = {x: f"[pos_{x}]" for x in range(512)}
         self.max_words = max_words
         self.aug_transform = Augfunc(resize_ratio, img_res=self.img_res)
         self.imgid_dict = {}
         n = 0
-        self.pos_dict = {x:f"[pos_{x}]" for x in range(512)}
+        self.pos_dict = {x: f"[pos_{x}]" for x in range(512)}
         for x in self.ann:
             id = x['file_name']
             if id not in self.imgid_dict.keys():
-                self.imgid_dict[id]=n
-                n+=1
+                self.imgid_dict[id] = n
+                n += 1
         self.hori_imgid_dict = {}
         for x in self.ann:
             id = x['file_name']
             if id not in self.hori_imgid_dict.keys():
-                self.hori_imgid_dict[id]=n
-                n+=1
+                self.hori_imgid_dict[id] = n
+                n += 1
 
     def __len__(self):
         return len(self.ann)
-        
-    def __getitem__(self, index):   
+
+    def __getitem__(self, index):
         ann = self.ann[index].copy()
         file_name = os.path.join(self.image_path, ann['file_name'])
         image = Image.open(file_name).convert('RGB')
@@ -67,7 +69,7 @@ class VCR_train_dataset(Dataset):
         w, h = image.size
         max_size = torch.as_tensor([w, h], dtype=torch.float32)
         cropped_boxes = torch.min(bbox_list.reshape(-1, 2, 2), max_size)
-        ann['bbox_list'] = cropped_boxes.reshape(-1,4).numpy().tolist()
+        ann['bbox_list'] = cropped_boxes.reshape(-1, 4).numpy().tolist()
         if 'with_answer' in ann:
             if ann['label'] == 1:
                 pos_qa_image, pos_qa_seq, pos_qa_img_id = self.make_positive_QA(image, ann)
@@ -88,26 +90,28 @@ class VCR_train_dataset(Dataset):
         x_min = bbox[0]
         y_min = bbox[1]
         x_max = bbox[2]
-        y_max = bbox[3] 
-        x1 = max(int(x_min * w,), 0)
-        y1 = max(int(y_min * h,), 0)
-        x2 = min(int(x_max * w,), 511)
-        y2 = min(int(y_max * h,), 511)
+        y_max = bbox[3]
+        x1 = max(int(x_min * w, ), 0)
+        y1 = max(int(y_min * h, ), 0)
+        x2 = min(int(x_max * w, ), 511)
+        y2 = min(int(y_max * h, ), 511)
         return [x1, y1, x2, y2]
+
     def make_pseudo_pos_seq(self, name, bbox, img_h, img_w):
-        hh = 512/int(img_h)
-        ww = 512/int(img_w)
+        hh = 512 / int(img_h)
+        ww = 512 / int(img_w)
         bbox_xyxy_resize = self.resize_bbox(bbox, hh, ww)
-        pos_seq = [name,' @@ ' ]
+        pos_seq = [name, ' @@ ']
         pos_seq.extend([self.pos_dict[m] for m in bbox_xyxy_resize])
         pos_seq.append(' ## ')
         pseudo_seq = ' '.join(pos_seq)
         return pseudo_seq
+
     def make_positive_QA(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['right_answer']
         target = target_update(target, bbox_dict)
         if len(target['not_crop_bbox_list']) > 0:
@@ -120,11 +124,12 @@ class VCR_train_dataset(Dataset):
         if do_horizontal:
             img_id = self.hori_imgid_dict[ann['file_name']]
         return image, vcr_right_qa_seq, img_id
+
     def make_positive_QAR(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['right_answer']
         target['rationale'] = ann['right_rationale']
         target = target_update(target, bbox_dict)
@@ -138,11 +143,12 @@ class VCR_train_dataset(Dataset):
         if do_horizontal:
             img_id = self.hori_imgid_dict[ann['file_name']]
         return image, vcr_right_qa_seq, img_id
+
     def make_neg_QA(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['wrong_answer']
         target = target_update(target, bbox_dict)
         if len(target['not_crop_bbox_list']) > 0:
@@ -155,11 +161,12 @@ class VCR_train_dataset(Dataset):
         if do_horizontal:
             image, vcr_right_qa_seq, img_id, self.hori_imgid_dict[ann['file_name']]
         return image, vcr_right_qa_seq, img_id, self.imgid_dict[ann['file_name']]
+
     def make_neg_QAR(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['right_answer']
         target['rationale'] = ann['wrong_rationale']
         target = target_update(target, bbox_dict)
@@ -173,11 +180,12 @@ class VCR_train_dataset(Dataset):
         if do_horizontal:
             image, vcr_right_qa_seq, img_id, self.hori_imgid_dict[ann['file_name']]
         return image, vcr_right_qa_seq, img_id, self.imgid_dict[ann['file_name']]
+
     def make_hard_negative_same_obj_QA(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['right_answer']
         target = target_update(target, bbox_dict)
         if self.hard_neg_aug:
@@ -185,7 +193,7 @@ class VCR_train_dataset(Dataset):
         else:
             bbox_neg_dict = {}
             for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-                bbox_neg_dict[index] = {'bbox':bbox, 'name':name}
+                bbox_neg_dict[index] = {'bbox': bbox, 'name': name}
             do_bbox_neg_gen = False
         target = target_update(target, bbox_neg_dict)
         if len(target['not_crop_bbox_list']) > 0:
@@ -200,11 +208,12 @@ class VCR_train_dataset(Dataset):
             img_id = self.imgid_dict[ann['file_name']]
             # vcr_right_qa_seq += ' [yeschoice] '
         return image, vcr_right_qa_seq, img_id
+
     def make_hard_negative_same_obj_QAR(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['right_answer']
         target['rationale'] = ann['right_rationale']
         target = target_update(target, bbox_dict)
@@ -213,7 +222,7 @@ class VCR_train_dataset(Dataset):
         else:
             bbox_neg_dict = {}
             for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-                bbox_neg_dict[index] = {'bbox':bbox, 'name':name}
+                bbox_neg_dict[index] = {'bbox': bbox, 'name': name}
             do_bbox_neg_gen = False
         target = target_update(target, bbox_neg_dict)
         if len(target['not_crop_bbox_list']) > 0:
@@ -228,11 +237,12 @@ class VCR_train_dataset(Dataset):
             img_id = self.imgid_dict[ann['file_name']]
             # vcr_right_qa_seq += '  [yeschoice] '
         return image, vcr_right_qa_seq, img_id
+
     def make_hard_negative_diff_obj_QA(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['right_answer']
         target = target_update(target, bbox_dict)
         if self.hard_neg_aug:
@@ -240,7 +250,7 @@ class VCR_train_dataset(Dataset):
         else:
             bbox_neg_dict = {}
             for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-                bbox_neg_dict[index] = {'bbox':bbox, 'name':name}
+                bbox_neg_dict[index] = {'bbox': bbox, 'name': name}
             do_bbox_neg_gen = False
         target = target_update(target, bbox_neg_dict)
         if len(target['not_crop_bbox_list']) > 0:
@@ -255,11 +265,12 @@ class VCR_train_dataset(Dataset):
             img_id = self.imgid_dict[ann['file_name']]
             # vcr_right_qa_seq += ' [yeschoice] '
         return image, vcr_right_qa_seq, img_id
+
     def make_hard_negative_diff_obj_QAR(self, image, ann):
         target = ann.copy()
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         target['answer'] = ann['right_answer']
         target['rationale'] = ann['right_rationale']
         target = target_update(target, bbox_dict)
@@ -268,7 +279,7 @@ class VCR_train_dataset(Dataset):
         else:
             bbox_neg_dict = {}
             for index, (bbox, name) in enumerate(zip(target['bbox_list'], target['names'])):
-                bbox_neg_dict[index] = {'bbox':bbox, 'name':name}
+                bbox_neg_dict[index] = {'bbox': bbox, 'name': name}
             do_bbox_neg_gen = False
         target = target_update(target, bbox_neg_dict)
         if len(target['not_crop_bbox_list']) > 0:
@@ -287,12 +298,12 @@ class VCR_train_dataset(Dataset):
 
 class VCR_test_dataset(Dataset):
     def __init__(self, ann_file, img_res, dataload_mode, image_path, max_words=500):
-        self.ann=[]
-        self.image_path=image_path
+        self.ann = []
+        self.image_path = image_path
         # self.image_file = json.load(open('/weka-jd/prod/public/permanent/group_liuzhiyuan/chenqianyu/workspaces/dataset_center/pevl/chenqianyu_vcr_images_base64.json'))
-        self.img_res=img_res
+        self.img_res = img_res
         self.dataload_mode = dataload_mode
-        self.position_token_dict = {x:f"[pos_{x}]" for x in range(512)}
+        self.position_token_dict = {x: f"[pos_{x}]" for x in range(512)}
         for x in ann_file:
             self.ann += json.load(open(x))
         self.max_words = max_words
@@ -301,7 +312,7 @@ class VCR_test_dataset(Dataset):
             transforms.ToTensor(),
             normalize,
         ])
-    
+
     def __len__(self):
         return len(self.ann)
 
@@ -309,25 +320,25 @@ class VCR_test_dataset(Dataset):
         x_min = bbox[0]
         y_min = bbox[1]
         x_max = bbox[2]
-        y_max = bbox[3] 
-        
-        x1 = max(int(x_min * w,), 0)
-        y1 = max(int(y_min * h,), 0)
-        x2 = min(int(x_max * w,), 511)
-        y2 = min(int(y_max * h,), 511)
+        y_max = bbox[3]
+
+        x1 = max(int(x_min * w, ), 0)
+        y1 = max(int(y_min * h, ), 0)
+        x2 = min(int(x_max * w, ), 511)
+        y2 = min(int(y_max * h, ), 511)
         return [x1, y1, x2, y2]
-    
+
     def make_pseudo_pos_seq(self, name, bbox, img_h, img_w):
-        if self.dataload_mode=='pevl':
-            hh = 512/int(img_h)
-            ww = 512/int(img_w)
+        if self.dataload_mode == 'pevl':
+            hh = 512 / int(img_h)
+            ww = 512 / int(img_w)
             bbox_xyxy_resize = self.resize_bbox(bbox, hh, ww)
-            pos_seq = [name,' @@ ' ]
+            pos_seq = [name, ' @@ ']
             pos_seq.extend([self.position_token_dict[m] for m in bbox_xyxy_resize])
             pos_seq.append(' ## ')
             pseudo_seq = ' '.join(pos_seq)
             return pseudo_seq
-        elif self.dataload_mode=='albef':
+        elif self.dataload_mode == 'albef':
             pseudo_seq = name
             return pseudo_seq
 
@@ -345,12 +356,12 @@ class VCR_test_dataset(Dataset):
         w, h = image.size
         max_size = torch.as_tensor([w, h], dtype=torch.float32)
         cropped_boxes = torch.min(bbox_list.reshape(-1, 2, 2), max_size)
-        ann['bbox_list'] = cropped_boxes.reshape(-1,4).numpy().tolist()
-        image, ann = resize(image, ann, (self.img_res,self.img_res))
+        ann['bbox_list'] = cropped_boxes.reshape(-1, 4).numpy().tolist()
+        image, ann = resize(image, ann, (self.img_res, self.img_res))
         image = self.transform(image)
         bbox_dict = {}
         for index, (bbox, name) in enumerate(zip(ann['bbox_list'], ann['names'])):
-            bbox_dict[index] = {'bbox':bbox, 'name':name}  
+            bbox_dict[index] = {'bbox': bbox, 'name': name}
         normal_question = ann['question']
         normal_answer_list = ann['answer_choices'] if "answer_choices" in ann else ann["rationale_choices"]
         img_w = ann['width']
@@ -380,7 +391,7 @@ class VCR_test_dataset(Dataset):
                 else:
                     pseudo_answer.append(answer_token)
             pseudo_question = ' '.join(pseudo_question_list)
-            pseudo_question = pre_question(pseudo_question,1000).replace('[sep]','[SEP]').split(' ')
+            pseudo_question = pre_question(pseudo_question, 1000).replace('[sep]', '[SEP]').split(' ')
             pseudo_answer = ' '.join(pseudo_answer)
             pseudo_answer = pre_question(pseudo_answer, 1000).split(' ')
             vcr_caption = []
@@ -388,14 +399,15 @@ class VCR_test_dataset(Dataset):
             vcr_caption.append('[SEP]')
             vcr_caption.extend(pseudo_answer)
             vcr_caption_seq = ' '.join(vcr_caption)
-            vcr_caption_seq = pre_question(vcr_caption_seq, self.max_words).replace('[sep]','[SEP]')
+            vcr_caption_seq = pre_question(vcr_caption_seq, self.max_words).replace('[sep]', '[SEP]')
             test_seq_list.append(vcr_caption_seq)
         label = ann["answer_label"] if "answer_label" in ann else ann["rationale_label"]
         label = torch.tensor(label)
-        image= image.view((1,3,self.img_res,self.img_res))
-        image = torch.cat([image,image,image,image],dim=0)
+        image = image.view((1, 3, self.img_res, self.img_res))
+        image = torch.cat([image, image, image, image], dim=0)
         return image, test_seq_list, label, ann['annot_id']
-        
+
+
 def computeIoU(box1, box2):
     # each box is of [x1, y1, w, h]
     inter_x1 = max(box1[0], box2[0])
@@ -418,22 +430,21 @@ def resize_bbox(bbox, h, w):
     x_min = bbox[0]
     y_min = bbox[1]
     x_max = bbox[2]
-    y_max = bbox[3] 
+    y_max = bbox[3]
     # x1 = max(int(x_min * w,), 0)
     # y1 = max(int(y_min * h,), 0)
-    x1 = min(max(int(x_min * w,), 0), 511)
-    y1 = min(max(int(y_min * h,), 0), 511)
-    x2 = min(int(x_max * w,), 511)
-    y2 = min(int(y_max * h,), 511)
+    x1 = min(max(int(x_min * w, ), 0), 511)
+    y1 = min(max(int(y_min * h, ), 0), 511)
+    x2 = min(int(x_max * w, ), 511)
+    y2 = min(int(y_max * h, ), 511)
     return [x1, y1, x2, y2]
 
 
-
 def make_pseudo_pos_seq(name, bbox, img_h, img_w):
-    hh = 512/int(img_h)
-    ww = 512/int(img_w)
+    hh = 512 / int(img_h)
+    ww = 512 / int(img_w)
     bbox_xyxy_resize = resize_bbox(bbox, hh, ww)
-    pos_seq = [name,' @@ ' ]
+    pos_seq = [name, ' @@ ']
     pos_seq.extend([pos_dict[m] for m in bbox_xyxy_resize])
     pos_seq.append(' ## ')
     pseudo_seq = ' '.join(pos_seq)
@@ -449,7 +460,7 @@ def pseudo_seq_gen(ann, do_horizontal, max_words, img_res):
     img_h = ann['height']
     bbox_dict = {}
     for index, (bbox, name) in enumerate(zip(ann['bbox_list'], ann['names'])):
-        bbox_dict[index] = {'bbox':bbox, 'name':name} 
+        bbox_dict[index] = {'bbox': bbox, 'name': name}
     assert int(img_w) == img_res
     assert int(img_h) == img_res
     pseudo_question = []
@@ -462,7 +473,7 @@ def pseudo_seq_gen(ann, do_horizontal, max_words, img_res):
                 bbox = bbox_dict[obj_index]['bbox']
                 pseudo_seq = make_pseudo_pos_seq(name, bbox, img_h, img_w)
                 pseudo_question.append(pseudo_seq)
-                if index < len(question_token)-1:
+                if index < len(question_token) - 1:
                     pseudo_question.append('and')
         else:
             pseudo_question.append(question_token)
@@ -473,7 +484,7 @@ def pseudo_seq_gen(ann, do_horizontal, max_words, img_res):
                 bbox = bbox_dict[obj_index]['bbox']
                 pseudo_seq = make_pseudo_pos_seq(name, bbox, img_h, img_w)
                 pseudo_answer.append(pseudo_seq)
-                if index < len(answer_token)-1:
+                if index < len(answer_token) - 1:
                     pseudo_answer.append('and')
         else:
             pseudo_answer.append(answer_token)
@@ -491,19 +502,18 @@ def pseudo_seq_gen(ann, do_horizontal, max_words, img_res):
                     bbox = bbox_dict[obj_index]['bbox']
                     pseudo_seq = make_pseudo_pos_seq(name, bbox, img_h, img_w)
                     pseudo_rationale.append(pseudo_seq)
-                    if index < len(answer_token)-1:
+                    if index < len(answer_token) - 1:
                         pseudo_answer.append('and')
             else:
                 pseudo_rationale.append(rationale_token)
         vcr_caption.extend(pseudo_rationale)
     vcr_caption_seq = ' '.join(vcr_caption)
-    vcr_caption_seq = pre_caption(vcr_caption_seq, max_words-2)
+    vcr_caption_seq = pre_caption(vcr_caption_seq, max_words - 2)
     vcr_caption_seq = vcr_caption_seq.replace("[sep]", "[SEP]")
     if do_horizontal:
         vcr_caption_seq = vcr_caption_seq.replace("left", "[TMP]").replace("right", "left").replace("[TMP]", "right")
     # print(vcr_caption_seq) 
-    return vcr_caption_seq 
-
+    return vcr_caption_seq
 
 
 def target_update(target, bbox_dict):
@@ -531,7 +541,7 @@ def target_update(target, bbox_dict):
     target['not_crop_bbox_list'] = not_crop_list
     bbox_list = []
     names = []
-    for index, (key,value) in enumerate(bbox_dict.items()):
+    for index, (key, value) in enumerate(bbox_dict.items()):
         assert index == key
         names.append(value['name'])
         bbox_list.append(value['bbox'])
@@ -540,32 +550,31 @@ def target_update(target, bbox_dict):
     target['not_crop_bbox_list'] = bbox_list
 
     target['names'] = names
-    return target 
-    
-
+    return target
 
 
 class Augfunc(object):
     def __init__(self, resize_ratio=0.25, img_res=None):
         self.resize_ratio = resize_ratio
         self.img_res = img_res
-        max_size=450
+        max_size = 450
         normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
         self.random_size_crop = Compose(
-                                            [
-                                                RandomResize([400, 450, ]),
-                                                RandomSizeCrop(384, max_size),
-                                            ]
-                                        ) 
-        #if self.horizontal:
+            [
+                RandomResize([400, 450, ]),
+                RandomSizeCrop(384, max_size),
+            ]
+        )
+        # if self.horizontal:
         self.random_horizontal = RandomHorizontalFlip()
-        self.final_transform = transforms.Compose([ 
-            RandomAugment(2,5,isPIL=True,augs=['Identity','AutoContrast','Equalize','Brightness','Sharpness',]),
-            transforms.ToTensor(),\
-            normalize,\
-        ])
+        self.final_transform = transforms.Compose([
+            RandomAugment(2, 5, isPIL=True, augs=['Identity', 'AutoContrast', 'Equalize', 'Brightness', 'Sharpness', ]),
+            transforms.ToTensor(), \
+            normalize, \
+            ])
+
     def random_aug(self, image, ann):
-        do_horizontal=False
+        do_horizontal = False
         if random.random() < self.resize_ratio:
             image, ann = resize(image, ann, (self.img_res, self.img_res))
         else:
@@ -575,9 +584,9 @@ class Augfunc(object):
         image, ann, do_horizontal = self.random_horizontal(image, ann)
         image = self.final_transform(image)
         return image, ann, do_horizontal
-        
 
-def pre_caption(caption,max_words):
+
+def pre_caption(caption, max_words):
     caption = re.sub(
         r"([,.'!?\"()*:;~])",
         '',
@@ -588,27 +597,28 @@ def pre_caption(caption,max_words):
         ' ',
         caption,
     )
-    caption = caption.rstrip('\n') 
+    caption = caption.rstrip('\n')
     caption = caption.strip(' ')
-    #truncate caption
+    # truncate caption
     caption_words = caption.split(' ')
-    if len(caption_words)>max_words:
+    if len(caption_words) > max_words:
         caption = ' '.join(caption_words[:max_words])
     return caption
 
 
-def pre_question(question,max_ques_words):
+def pre_question(question, max_ques_words):
     question = re.sub(
         r"([,.'!?\"()*:;~])",
         '',
         question.lower(),
-    ).replace('-', ' ').replace('/', ' ')  
+    ).replace('-', ' ').replace('/', ' ')
     question = question.rstrip(' ')
-    #truncate question
+    # truncate question
     question_words = question.split(' ')
-    if len(question_words)>max_ques_words:
+    if len(question_words) > max_ques_words:
         question = ' '.join(question_words[:max_ques_words])
     return question
+
 
 def hflip(image, target):
     flipped_image = F.hflip(image)
@@ -627,6 +637,7 @@ class RandomResize(object):
         assert isinstance(sizes, (list, tuple))
         self.sizes = sizes
         self.max_size = max_size
+
     def __call__(self, img, target=None):
         size = random.choice(self.sizes)
         return resize(img, target, size, self.max_size)
@@ -635,18 +646,20 @@ class RandomResize(object):
 class RandomHorizontalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
+
     def __call__(self, img, target):
         do_horizontal = False
         if random.random() < self.p:
             return hflip(img, target)
         return img, target, do_horizontal
-    
+
 
 class RandomSizeCrop(object):
     def __init__(self, min_size: int, max_size: int, respect_boxes: bool = True):
         self.min_size = min_size
         self.max_size = max_size
         self.respect_boxes = respect_boxes  # if True we can't crop a box out
+
     def __call__(self, img: PIL.Image.Image, target: dict):
         init_boxes = len(target["not_crop_bbox_list"])
         max_patience = 100
@@ -659,7 +672,7 @@ class RandomSizeCrop(object):
                 return result_img, result_target
             elif not self.respect_boxes or len(result_target["not_crop_bbox_list"]) == init_boxes or i == max_patience - 1:
                 return img, target
-        #return result_img, result_target
+        # return result_img, result_target
 
 
 def crop(image, target, region):
@@ -707,11 +720,13 @@ def resize(image, target, size, max_size=None):
             oh = size
             ow = int(size * w / h)
         return (oh, ow)
+
     def get_size(image_size, size, max_size=None):
         if isinstance(size, (list, tuple)):
             return size[::-1]
         else:
             return get_size_with_aspect_ratio(image_size, size, max_size)
+
     size = get_size(image.size, size, max_size)
     rescaled_image = F.resize(image, size)
     if target is None:
@@ -729,8 +744,8 @@ def resize(image, target, size, max_size=None):
         scaled_area = area * (ratio_width * ratio_height)
         target["area"] = scaled_area
     h, w = size
-    target['width']=w
-    target['height']=h
+    target['width'] = w
+    target['height'] = h
     target["size"] = torch.tensor([h, w]).numpy().tolist()
     return rescaled_image, target
 
@@ -738,10 +753,12 @@ def resize(image, target, size, max_size=None):
 class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
+
     def __call__(self, image, target):
         for t in self.transforms:
             image, target = t(image, target)
         return image, target
+
     def __repr__(self):
         format_string = self.__class__.__name__ + "("
         for t in self.transforms:
@@ -749,6 +766,3 @@ class Compose(object):
             format_string += "    {0}".format(t)
         format_string += "\n)"
         return format_string
-
-
-
