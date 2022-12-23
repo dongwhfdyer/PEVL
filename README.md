@@ -21,7 +21,7 @@ This is the official PyTorch implementation of the EMNLP 2022 paper "[PEVL: Posi
 
 
 ## Overview
-PEVL reformulates discretized object positions and language in a unified language modeling framework, which facilitates explicit VL alignment during pre-training, and also enables flexible prompt tuning for various downstream tasks. PEVL shows impressive results of detector-free VLP models on position-sensitive tasks such as referring expression comprehension and phrase grounding, and also improves the performance on position-insensitive tasks with grounded inputs such as visual commomsense reasoning, visual relation detection and visual question answering(GQA). For more details, please see the paper [PEVL](https://arxiv.org/abs/2205.11169)
+PEVL reformulates discretized object positions and language in a unified language modeling framework, which facilitates explicit VL alignment during pre-training and enables flexible prompt tuning for various downstream tasks. PEVL shows impressive results of detector-free VLP models on position-sensitive tasks such as referring expression comprehension and phrase grounding, and also improves the performance on position-insensitive tasks with grounded inputs such as visual commomsense reasoning, visual relation detection and visual question answering(GQA). For more details, please see the paper [PEVL](https://arxiv.org/abs/2205.11169)
 
 <img src="img.png" width="800">
 

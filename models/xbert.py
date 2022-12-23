@@ -979,14 +979,14 @@ class BertModel(BertPreTrainedModel):
                 encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states[0].size()
             else:
                 encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.size()
-            encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
+            encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length) # (batch_size, sequence_length)
 
-            if type(encoder_attention_mask) == list:
+            if type(encoder_attention_mask) == list: # False
                 encoder_extended_attention_mask = [self.invert_attention_mask(mask) for mask in encoder_attention_mask]
-            elif encoder_attention_mask is None:
+            elif encoder_attention_mask is None: # False
                 encoder_attention_mask = torch.ones(encoder_hidden_shape, device=device)
                 encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
-            else:
+            else: # True
                 encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
         else:
             encoder_extended_attention_mask = None
@@ -998,15 +998,15 @@ class BertModel(BertPreTrainedModel):
         # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
-        if encoder_embeds is None:
-            embedding_output = self.embeddings(
+        if encoder_embeds is None: # True
+            embedding_output = self.embeddings( # (batch_size, sentence_length, embed_size)
                 input_ids=input_ids,
                 position_ids=position_ids,
                 token_type_ids=token_type_ids,
                 inputs_embeds=inputs_embeds,
                 past_key_values_length=past_key_values_length,
             )
-        else:
+        else: # False
             embedding_output = encoder_embeds
 
         encoder_outputs = self.encoder(

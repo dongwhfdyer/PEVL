@@ -50,7 +50,7 @@ class Grounding_train_dataset(Dataset):
 
     def __getitem__(self, index):
         ann = self.ann[index].copy()
-        image = Image.open(os.path.join("/home/songzh/lihd/PEVL/data/", ann['file_name'])).convert('RGB')
+        image = Image.open(os.path.join("dsets/", ann['file_name'])).convert('RGB')
         if 'flickr' in ann['file_name']:
             caption = ann['pseudo_caption']
             image, ann, do_horizontal = self.aug_transform.random_aug(image, ann, True, False, self.img_res)
@@ -110,7 +110,7 @@ class Grounding_eval_dataset(Dataset):
 
     def __getitem__(self, index):
         ann = self.ann[index]
-        image = Image.open(ann['file_name']).convert('RGB')
+        image = Image.open(os.path.join("dsets/", ann['file_name'])).convert('RGB')
 
         image = self.transform(image)
         caption = ann['pseudo_caption']

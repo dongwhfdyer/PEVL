@@ -129,6 +129,8 @@ def finetune(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, devi
     for i, (image, text) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         optimizer.zero_grad()
         image = image.to(device, non_blocking=True)
+        # text is a list of real sentences. Each sentence has 4 mask tokens, like @@  [pos_423] [pos_115] [pos_492] [pos_483]  ##.
+        # text_input is dict. It contains three tensors: input_ids(8,40), token_type_ids(8,41), attention_mask(8,40).
         text_input = tokenizer(text, padding='longest', truncation=True, max_length=300, return_tensors="pt").to(device)
         if epoch > 0:
             alpha = config['alpha']
@@ -144,7 +146,7 @@ def finetune(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, devi
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
         if epoch == 0 and i % step_size == 0 and i <= warmup_iterations:
-            scheduler.step(i // step_size)
+            scheduler.step(i // step_size) # update learning rate every step_size iterations and only when i <= warmup_iterations
         if i != 0 and i % args.eval_step == 0:
             checkpoint(args.output_dir, epoch, i, model, tokenizer, config, device)
         dist.barrier()
@@ -414,7 +416,7 @@ def main(args, config):
                 val_data_loader = create_loader(val_dataset, [None], batch_size=[config['test_batch_size']], num_workers=[1], is_trains=[False], collate_fns=[None])[0]
                 grounding_test(val_model, val_data_loader, tokenizer, device, config)
 
-                print('.....................REFCOCO+ TESTB BEGIN EVAL.....................')
+                print('....................REFCOCO+ TESTB BEGIN EVAL.....................')
                 val_dataset = [Grounding_eval_dataset(config['refcocop_testB'], config['image_res'])]
                 val_data_loader = create_loader(val_dataset, [None], batch_size=[config['test_batch_size']], num_workers=[1], is_trains=[False], collate_fns=[None])[0]
                 grounding_test(val_model, val_data_loader, tokenizer, device, config)
@@ -446,6 +448,9 @@ if __name__ == '__main__':
     parser.add_argument('--pretrain', default=0, type=int)
     parser.add_argument('--train', default=1, type=int)
     parser.add_argument('--eval_step', default=500, type=int)
+    # local rank
+    parser.add_argument('--local_rank', default=0, type=int)
+
 
     args = parser.parse_args()
 

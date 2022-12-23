@@ -24,11 +24,11 @@ class PEVL_Grounding(nn.Module):
 
         embed_dim = config['embed_dim']
 
-        self.visual_encoder = VisionTransformer(
+        self.visual_encoder = VisionTransformer(  # if the input image is 512x512, patch_size=16, embed_dim=768, depth=12, then the output's shape is (B, (512/16)^2+1, 768)
             img_size=config['image_res'], patch_size=16, embed_dim=768, depth=12, num_heads=12,
             mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6))
 
-        if init_deit:
+        if init_deit:  # False
             checkpoint = torch.hub.load_state_dict_from_url(
                 url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
                 map_location="cpu", check_hash=True)
@@ -72,8 +72,8 @@ class PEVL_Grounding(nn.Module):
         self.register_buffer("text_queue", torch.randn(embed_dim, self.queue_size))
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
-        self.image_queue = nn.functional.normalize(self.image_queue, dim=0)
-        self.text_queue = nn.functional.normalize(self.text_queue, dim=0)
+        self.image_queue = nn.functional.normalize(self.image_queue, dim=0)  # shape: (embed_dim, queue_size) (256, 65536)
+        self.text_queue = nn.functional.normalize(self.text_queue, dim=0)  # shape: (embed_dim, queue_size) (256, 65536)
 
         # define exponential decay ratio for position tokens' soft label
         self.exp_decay_ratio = config['exp_decay_ratio']
@@ -86,19 +86,25 @@ class PEVL_Grounding(nn.Module):
         a = np.array(a)
         for x, y in enumerate(a):
             a[x] = np.abs(a[x] - x)
+
+        # Before running this line below, we already get a matrix with shape (512, 512).
+        # It's a symmetric matrix. The diagonal is 0. The value of the matrix is the distance between the row index and the column index.
         a = np.exp(-self.exp_decay_ratio * a)
+        # Then we will get the dict. the shape is [512, 512]
         pos_tokens_simmartix_dict = {}
         pos_token = [f'[pos_{x}]' for x in range(512)]
         for x, y in zip(pos_token, a):
-            pos_tokens_simmartix_dict[x] = y
-
+            pos_tokens_simmartix_dict[x] = y  # pos_tokens_simmartix_dict's data is the same as the matrix a. The key is the exponent of the matrix a.
+        # Now, we are trying to transform the postoken.
         # when the number of position tokens are different from 512, you can change 800 to the index of Maximum of them. (In our case,it's the index of '##' )
         t = torch.randn((800, 30522)).fill_(0)
         for x in postoken_dict.keys():
             postoken_vector = pos_tokens_simmartix_dict[x]
             index = postoken_dict[x]
-            t[index, self.min_pos + 1:self.max_pos] = torch.Tensor(postoken_vector / np.sum(postoken_vector))
-
+            t[index, self.min_pos + 1:self.max_pos] = torch.Tensor(postoken_vector / np.sum(postoken_vector))  # min_pos: 205 max_pos: 718 postoken_vector‘s shape is (512,).
+        # t's shape is (800, 30522). But many rows are all 0.
+        # The rows with all 0 are the position tokens that are not in the postoken_dict.
+        # About the column, the first 205 are all 0. The next 513 are the probability of the position tokens. The last 30004 are all 0.
         self.pos_tokens_soft_labels = t
 
         # define loss weight for position tokens' ordering-aware objective
@@ -108,7 +114,7 @@ class PEVL_Grounding(nn.Module):
         if mode == 'pretrain':
             with torch.no_grad():
                 self.temp.clamp_(0.001, 0.5)
-            image_embeds = self.visual_encoder(image)
+            image_embeds = self.visual_encoder(image) # if the input image is 512x512, patch_size=16, embed_dim=768, depth=12, then the output's shape is (B, (512/16)^2+1, 768)
             image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image.device)
             image_feat = F.normalize(self.vision_proj(image_embeds[:, 0, :]), dim=-1)
             text_output = self.text_encoder.bert(text.input_ids, attention_mask=text.attention_mask,
@@ -240,25 +246,26 @@ class PEVL_Grounding(nn.Module):
             return loss_soft, loss_ita, loss_itm
 
         elif mode == 'finetune':
-            image_embeds = self.visual_encoder(image)
-            image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image.device)
+            # if the input image is 512x512, patch_size=16, embed_dim=768, depth=12, then the output's shape is (B, (512/16)^2+1, 768)
+            image_embeds = self.visual_encoder(image)  # image: (bs, 3, imgsiz, imgsiz) image_embeds: (bs, seq_len, dim)
+            image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image.device) # (bs, seq_len) All elements are 1
 
             ##================= GMLM ========================##       
             input_ids = text.input_ids.clone()
             labels = input_ids.clone()
-            probability_matrix = torch.full(labels.shape, self.mlm_probability)
-            input_ids, labels, _ = self.postoken_mask(input_ids, targets=labels, probability_matrix=probability_matrix)
+            probability_matrix = torch.full(labels.shape, self.mlm_probability)  # (bs, sentence_len)
+            input_ids, labels, _ = self.postoken_mask(input_ids, targets=labels, probability_matrix=probability_matrix) # These three tensor's shape is (bs, sentence_len).
 
-            mlm_output = self.text_encoder(input_ids,
-                                           attention_mask=text.attention_mask,
-                                           encoder_hidden_states=image_embeds,
-                                           encoder_attention_mask=image_atts,
+            mlm_output = self.text_encoder(input_ids, # (bs, sentence_len)
+                                           attention_mask=text.attention_mask, # (bs, sentence_len)
+                                           encoder_hidden_states=image_embeds, # (bs, seq_len, dim)
+                                           encoder_attention_mask=image_atts, # (bs, seq_len)
                                            return_dict=True,
-                                           labels=labels, )
+                                           labels=labels, ) # (bs, sentence_len)
 
-            postokens_softlabels = self.pos_tokens_soft_labels.to(image.device)
-            logits = mlm_output.logits
-            pos_logits = logits[(labels > self.min_pos) & (labels < self.max_pos) & (labels != -100)]
+            postokens_softlabels = self.pos_tokens_soft_labels.to(image.device) # (800, vocab_size)
+            logits = mlm_output.logits # (bs, sentence_len, vocab_size)
+            pos_logits = logits[(labels > self.min_pos) & (labels < self.max_pos) & (labels != -100)] # get the logits of the masked tokens
             batch_pos_soft_labels = postokens_softlabels[labels[(labels > self.min_pos) & (labels < self.max_pos) & (labels != -100)]]
             loss_soft = -torch.sum(F.log_softmax(pos_logits, dim=1) * batch_pos_soft_labels, dim=-1).mean()
 
